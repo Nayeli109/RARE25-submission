@@ -1,27 +1,35 @@
 # Use an official PyTorch runtime as a parent image
 FROM pytorch/pytorch:latest
 
-# Set up a new user "user"
-RUN groupadd -r user && useradd -m --no-log-init -r -g user user
-
 # Set the working directory in the container
 WORKDIR /opt/app
 
-# --- ¡AQUÍ ESTÁ LA MAGIA! ---
-# Creamos las carpetas vacías que el baseline espera encontrar
+# --- PRIMERO, PREPARAMOS TODO COMO "JEFE" (root) ---
+
+# 1. Creamos las carpetas vacías que el baseline espera
 RUN mkdir resources
 RUN mkdir model
 
-# Change to the new user
+# 2. Copiamos la lista de la compra
+COPY requirements.txt /opt/app/
+
+# 3. Copiamos nuestra carpeta 'model' (que ahora sí está en GitHub)
+COPY model /opt/app/model
+
+# 4. Copiamos nuestra receta de inferencia
+COPY inference.py /opt/app/
+
+# 5. Instalamos las librerías
+RUN python -m pip install --no-cache-dir --no-color --requirement /opt/app/requirements.txt
+
+# --- AHORA, LE DAMOS TODO AL "USER" ---
+
+# 6. Creamos al usuario y le damos la propiedad de todo
+RUN groupadd -r user && useradd -m --no-log-init -r -g user user
+RUN chown -R user:user /opt/app
+
+# 7. ¡Y AHORA SÍ, NOS PONEMOS EL UNIFORME!
 USER user
-
-# Copiamos nuestros archivos
-COPY --chown=user:user requirements.txt /opt/app/
-COPY --chown=user:user model /opt/app/model # Esta línea la dejamos por si acaso
-COPY --chown=user:user inference.py /opt/app/
-
-# Instalamos las librerías
-RUN python -m pip install --user --no-cache-dir --no-color --requirement /opt/app/requirements.txt
 
 # By default, run the inference script
 CMD ["python", "-u", "inference.py"]
