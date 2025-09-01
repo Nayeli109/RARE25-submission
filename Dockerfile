@@ -1,35 +1,30 @@
-# Use an official PyTorch runtime as a parent image
+# We use an official PyTorch image as the base
 FROM pytorch/pytorch:latest
 
-# Set the working directory in the container
+# Set the working directory inside the container
 WORKDIR /opt/app
 
-# --- PRIMERO, PREPARAMOS TODO COMO "JEFE" (root) ---
+# --- Start as "Boss" (root) to prepare everything ---
 
-# 1. Creamos las carpetas vacías que el baseline espera
-RUN mkdir resources
-RUN mkdir model
-
-# 2. Copiamos la lista de la compra
+# 1. Copy ALL required files and folders from GitHub into the "box"
 COPY requirements.txt /opt/app/
-
-# 3. Copiamos nuestra carpeta 'model' (que ahora sí está en GitHub)
-COPY model /opt/app/model
-
-# 4. Copiamos nuestra receta de inferencia
+COPY model /opt/app/model/
+COPY resources /opt/app/resources/
 COPY inference.py /opt/app/
 
-# 5. Instalamos las librerías
-RUN python -m pip install --no-cache-dir --no-color --requirement /opt/app/requirements.txt
+# 2. Install the Python libraries
+RUN python -m pip install --no-cache-dir --requirement /opt/app/requirements.txt
 
-# --- AHORA, LE DAMOS TODO AL "USER" ---
+# --- Now, prepare the user for security ---
 
-# 6. Creamos al usuario y le damos la propiedad de todo
+# 3. Create a non-privileged user
 RUN groupadd -r user && useradd -m --no-log-init -r -g user user
+
+# 4. Give ownership of our entire application to the new user
 RUN chown -R user:user /opt/app
 
-# 7. ¡Y AHORA SÍ, NOS PONEMOS EL UNIFORME!
+# 5. Switch to that user's "uniform"
 USER user
 
-# By default, run the inference script
+# By default, when starting, run our inference script
 CMD ["python", "-u", "inference.py"]
