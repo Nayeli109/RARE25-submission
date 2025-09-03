@@ -17,7 +17,8 @@ class RARE25Algorithm:
             torch.nn.Linear(num_ftrs, 2)
         )
         
-        # OJO: ¡Hemos añadido nuestro cerebro a la "caja"! Ya no está en /opt/algorithm
+        # --- ¡ESTA ES LA DIRECCIÓN CORRECTA! ---
+        # Le decimos que busque el cerebro en la misma carpeta donde está él.
         model_path = "RARE25_best_model.pth" 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
@@ -43,8 +44,6 @@ class RARE25Algorithm:
         return cancer_probability
 
     def save_output(self, probability: float):
-        # --- ¡ESTA ES LA CORRECCIÓN FINAL! ---
-        # El juez quiere una LISTA (array) de resultados, no un sobre (objeto).
         output_data = [
             {
                 "value": probability
@@ -57,7 +56,6 @@ class RARE25Algorithm:
         
         print(f"Resultado guardado en {OUTPUT_PATH}")
 
-# Esta función es la que llama Grand Challenge para procesar la imagen
 def process_image(image_path: str):
     algorithm = RARE25Algorithm()
     image = Image.open(image_path)
