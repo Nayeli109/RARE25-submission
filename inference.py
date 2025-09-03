@@ -1,132 +1,68 @@
-"""
-The following is a simple example algorithm.
-
-It is meant to run within a container.
-
-To run the container locally, you can call the following bash script:
-
-  ./do_test_run.sh
-
-This will start the inference and reads from ./test/input and writes to ./test/output
-
-To save the container and prep it for upload to Grand-Challenge.org you can call:
-
-  ./do_save.sh
-
-Any container that shows the same behaviour will do, this is purely an example of how one COULD do it.
-
-Reference the documentation to get details on the runtime environment on the platform:
-https://grand-challenge.org/documentation/runtime-environment/
-
-Happy programming!
-"""
-
-from pathlib import Path
-import json
-from glob import glob
-import SimpleITK
+import torch
+from torchvision import models, transforms
+from PIL import Image
 import numpy as np
+import json
+import os
 
-INPUT_PATH = Path("/input")
-OUTPUT_PATH = Path("/output")
-RESOURCE_PATH = Path("resources")
+# Define la ruta de salida que Grand Challenge espera
+OUTPUT_PATH = "/output/stacked-neoplastic-lesion-likelihoods.json"
 
+class RARE25Algorithm:
+    def __init__(self):
+        self.model = models.efficientnet_b0(weights=None)
+        num_ftrs = self.model.classifier[1].in_features
+        self.model.classifier = torch.nn.Sequential(
+            torch.nn.Dropout(p=0.4, inplace=True),
+            torch.nn.Linear(num_ftrs, 2)
+        )
+        
+        # OJO: ¡Hemos añadido nuestro cerebro a la "caja"! Ya no está en /opt/algorithm
+        model_path = "RARE25_best_model.pth" 
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+        self.model.to(self.device)
+        self.model.eval()
 
-def run():
-    # The key is a tuple of the slugs of the input sockets
-    interface_key = get_interface_key()
+        self.transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
 
-    # Lookup the handler for this particular set of sockets (i.e. the interface)
-    handler = {
-        ("stacked-barretts-esophagus-endoscopy-images",): interface_0_handler,
-    }[interface_key]
+    def predict(self, image: Image.Image) -> float:
+        image = image.convert("RGB")
+        image_tensor = self.transform(image).unsqueeze(0).to(self.device)
+        
+        with torch.no_grad():
+            outputs = self.model(image_tensor)
+            probabilities = torch.nn.functional.softmax(outputs, dim=1)
+        
+        cancer_probability = probabilities[0][1].item()
+        return cancer_probability
 
-    # Call the handler
-    return handler()
+    def save_output(self, probability: float):
+        # --- ¡ESTA ES LA CORRECCIÓN FINAL! ---
+        # El juez quiere una LISTA (array) de resultados, no un sobre (objeto).
+        output_data = [
+            {
+                "value": probability
+            }
+        ]
+        
+        os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+        with open(OUTPUT_PATH, 'w') as f:
+            json.dump(output_data, f)
+        
+        print(f"Resultado guardado en {OUTPUT_PATH}")
 
-
-def interface_0_handler():
-    # Read the input
-    input_stacked_barretts_esophagus_endoscopy_images = load_image_file_as_array(
-        location=INPUT_PATH / "images/stacked-barretts-esophagus-endoscopy",
-    )
-    # Process the inputs: any way you'd like
-    _show_torch_cuda_info()
-
-    # Optional: part of the Docker-container image: resources/
-    # resource_dir = Path("/opt/app/resources")
-    # with open(resource_dir / "some_resource.txt", "r") as f:
-    #     print(f.read())
-
-    """ Run your model here """
-    # for demonstration we will use the timm classification model from the model directory
-    from model.timm_model import TimmClassificationModel
-    print('ResNet50-baseline')
-    model = TimmClassificationModel(
-        model_name="resnet50",
-        num_classes=1,
-        weights=RESOURCE_PATH / "resnet50.pth",
-    )
-
-    output_stacked_neoplastic_lesion_likelihoods = model.predict(input_stacked_barretts_esophagus_endoscopy_images)
-
-
-    # Save your output
-    write_json_file(
-        location=OUTPUT_PATH / "stacked-neoplastic-lesion-likelihoods.json",
-        content=output_stacked_neoplastic_lesion_likelihoods,
-    )
-
-    return 0
-
-
-def get_interface_key():
-    # The inputs.json is a system generated file that contains information about
-    # the inputs that interface with the algorithm
-    inputs = load_json_file(
-        location=INPUT_PATH / "inputs.json",
-    )
-    socket_slugs = [sv["interface"]["slug"] for sv in inputs]
-    return tuple(sorted(socket_slugs))
-
-
-def load_json_file(*, location):
-    # Reads a json file
-    with open(location, "r") as f:
-        return json.loads(f.read())
-
-
-def write_json_file(*, location, content):
-    # Writes a json file
-    with open(location, "w") as f:
-        f.write(json.dumps(content, indent=4))
-
-0
-def load_image_file_as_array(*, location):
-    # Use SimpleITK to read a file
-    input_files = (
-        glob(str(location / "*.tif"))
-        + glob(str(location / "*.tiff"))
-        + glob(str(location / "*.mha"))
-    )
-    result = SimpleITK.ReadImage(input_files[0])
-
-    # Convert it to a Numpy array
-    return SimpleITK.GetArrayFromImage(result)
-
-
-def _show_torch_cuda_info():
-    import torch
-
-    print("=+=" * 10)
-    print("Collecting Torch CUDA information")
-    print(f"Torch CUDA is available: {(available := torch.cuda.is_available())}")
-    if available:
-        print(f"\tnumber of devices: {torch.cuda.device_count()}")
-        print(f"\tcurrent device: { (current_device := torch.cuda.current_device())}")
-        print(f"\tproperties: {torch.cuda.get_device_properties(current_device)}")
-    print("=+=" * 10)
-
+# Esta función es la que llama Grand Challenge para procesar la imagen
+def process_image(image_path: str):
+    algorithm = RARE25Algorithm()
+    image = Image.open(image_path)
+    result_prob = algorithm.predict(image)
+    algorithm.save_output(result_prob)
 
 if __name__ == "__main__":
-    raise SystemExit(run())
+    pass
