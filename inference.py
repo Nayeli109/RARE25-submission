@@ -17,7 +17,7 @@ class RARE25Algorithm:
             torch.nn.Linear(num_ftrs, 2)
         )
         
-        # --- ¡ESTA ES LA DIRECCIÓN CORRECTA! ---
+        # ------
         # Le decimos que busque el cerebro en la misma carpeta donde está él.
         model_path = "RARE25_best_model.pth" 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
