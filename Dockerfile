@@ -4,8 +4,8 @@ FROM pytorch/pytorch:latest
 # 2. Establecemos nuestro lugar de trabajo
 WORKDIR /opt/app
 
-# 3. ¡EL COMANDO MÁGICO! Copiamos TODO lo que hay en GitHub a la "caja"
-# Esto lo hacemos como "Jefe" (root) para que no haya problemas de permisos al copiar
+# 3. Copiamos TODO lo que hay en GitHub a la "caja"
+# Esto lo hacemos como (root) para que no haya problemas de permisos al copiar
 COPY . .
 
 # 4. Instalamos las librerías necesarias
@@ -17,8 +17,8 @@ RUN groupadd -r user && useradd -m --no-log-init -r -g user user
 # 6. Le damos al conductor la propiedad del coche
 RUN chown -R user:user /opt/app
 
-# 7. ¡Y AHORA SÍ, LE DAMOS LAS LLAVES AL CONDUCTOR DESIGNADO!
+# 7. 
 USER user
 
-# 8. El conductor arranca el coche
+# 8. 
 CMD ["python", "-u", "inference.py"]
