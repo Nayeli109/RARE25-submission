@@ -4,8 +4,10 @@ from PIL import Image
 import numpy as np
 import json
 import os
+import glob
+import openslide # ¡La herramienta del cerrajero!
 
-# Define la ruta de salida que Grand Challenge espera
+INPUT_DIR = "/input/"
 OUTPUT_PATH = "/output/stacked-neoplastic-lesion-likelihoods.json"
 
 class RARE25Algorithm:
@@ -17,9 +19,7 @@ class RARE25Algorithm:
             torch.nn.Linear(num_ftrs, 2)
         )
         
-        # ------
-        # Le decimos que busque el cerebro en la misma carpeta donde está él.
-        model_path = "RARE25_best_model.pth" 
+        model_path = "/opt/app/RARE25_best_model.pth" 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         self.model.load_state_dict(torch.load(model_path, map_location=self.device))
@@ -56,11 +56,29 @@ class RARE25Algorithm:
         
         print(f"Resultado guardado en {OUTPUT_PATH}")
 
-def process_image(image_path: str):
+def run_inference():
+    # 1. Buscamos  .dzi en la carpeta de entrada
+    dzi_files = glob.glob(os.path.join(INPUT_DIR, "*.dzi"))
+    if not dzi_files:
+        raise FileNotFoundError(f"No se encontró un archivo .dzi en {INPUT_DIR}")
+
+    dzi_path = dzi_files[0]
+    print(f"Abriendo la caja fuerte: {dzi_path}")
+
+    # 2. 
+    slide = openslide.OpenSlide(dzi_path)
+    
+    # 3. Leemos la imagen completa y la convertimos
+    image = slide.read_region((0,0), 0, slide.level_dimensions[0]).convert("RGB")
+    slide.close()
+    
+    print("¡Imagen extraída con éxito! Pasando al chef...")
+
+    # 4. Creamos el algoritmo y procesamos la imagen
     algorithm = RARE25Algorithm()
-    image = Image.open(image_path)
     result_prob = algorithm.predict(image)
     algorithm.save_output(result_prob)
+    print("¡Proceso completado con éxito!")
 
 if __name__ == "__main__":
-    pass
+    run_inference()

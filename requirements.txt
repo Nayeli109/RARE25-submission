@@ -2,4 +2,4 @@ SimpleITK
 numpy
 timm
 torchvision
-
+openslide-python
